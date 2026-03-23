@@ -1,14 +1,16 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"test-backend-1-ArtyomRytikov/internal/middleware"
+	"test-backend-1-ArtyomRytikov/internal/service"
 )
 
-func NewRouter() http.Handler {
+func NewRouter(roomService *service.RoomService) http.Handler {
 	mux := http.NewServeMux()
+
+	roomHandler := NewRoomHandler(roomService)
 
 	mux.HandleFunc("/_info", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -29,8 +31,16 @@ func NewRouter() http.Handler {
 
 	mux.Handle("/admin/ping", middleware.RequireAuth(
 		middleware.RequireRole("admin", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			_ = json.NewEncoder(w).Encode(map[string]string{"status": "admin ok"})
+			writeJSON(w, http.StatusOK, map[string]string{"status": "admin ok"})
 		})),
+	))
+
+	mux.Handle("/rooms/create", middleware.RequireAuth(
+		middleware.RequireRole("admin", http.HandlerFunc(roomHandler.Create)),
+	))
+
+	mux.Handle("/rooms/list", middleware.RequireAuth(
+		http.HandlerFunc(roomHandler.List),
 	))
 
 	return mux
