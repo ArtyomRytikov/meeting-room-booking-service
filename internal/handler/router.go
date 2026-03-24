@@ -7,11 +7,16 @@ import (
 	"test-backend-1-ArtyomRytikov/internal/service"
 )
 
-func NewRouter(roomService *service.RoomService, scheduleService *service.ScheduleService) http.Handler {
+func NewRouter(
+	roomService *service.RoomService,
+	scheduleService *service.ScheduleService,
+	bookingService *service.BookingService,
+) http.Handler {
 	mux := http.NewServeMux()
 
 	roomHandler := NewRoomHandler(roomService)
 	scheduleHandler := NewScheduleHandler(scheduleService)
+	bookingHandler := NewBookingHandler(bookingService)
 
 	mux.HandleFunc("/_info", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -44,6 +49,18 @@ func NewRouter(roomService *service.RoomService, scheduleService *service.Schedu
 		http.HandlerFunc(roomHandler.List),
 	))
 
+	mux.Handle("/bookings/create", middleware.RequireAuth(
+		http.HandlerFunc(bookingHandler.Create),
+	))
+
+	mux.Handle("/bookings/my", middleware.RequireAuth(
+		http.HandlerFunc(bookingHandler.My),
+	))
+
+	mux.Handle("/bookings/list", middleware.RequireAuth(
+		middleware.RequireRole("admin", http.HandlerFunc(bookingHandler.List)),
+	))
+
 	mux.Handle("/rooms/", middleware.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPost && hasSuffix(r.URL.Path, "/schedule/create"):
@@ -51,6 +68,17 @@ func NewRouter(roomService *service.RoomService, scheduleService *service.Schedu
 			return
 		case r.Method == http.MethodGet && hasSuffix(r.URL.Path, "/slots/list"):
 			scheduleHandler.ListSlots(w, r)
+			return
+		default:
+			writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "not found")
+			return
+		}
+	})))
+
+	mux.Handle("/bookings/", middleware.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && hasSuffix(r.URL.Path, "/cancel"):
+			bookingHandler.Cancel(w, r)
 			return
 		default:
 			writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "not found")

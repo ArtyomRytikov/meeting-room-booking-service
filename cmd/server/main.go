@@ -55,7 +55,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	r := handler.NewRouter(roomService, scheduleService)
+	bookingRepo := postgresrepo.NewBookingRepository(pool)
+	bookingService := service.NewBookingService(bookingRepo)
+	if err := bookingService.Init(context.Background()); err != nil {
+		log.Fatal(err)
+	}
+
+	r := handler.NewRouter(roomService, scheduleService, bookingService)
 
 	log.Println("server started on :8080")
 	if err := http.ListenAndServe(":8080", r); err != nil {
