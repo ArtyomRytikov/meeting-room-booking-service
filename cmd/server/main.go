@@ -45,12 +45,17 @@ func main() {
 
 	roomRepo := postgresrepo.NewRoomRepository(pool)
 	roomService := service.NewRoomService(roomRepo)
-
 	if err := roomService.Init(context.Background()); err != nil {
 		log.Fatal(err)
 	}
 
-	r := handler.NewRouter(roomService)
+	scheduleRepo := postgresrepo.NewScheduleRepository(pool)
+	scheduleService := service.NewScheduleService(scheduleRepo)
+	if err := scheduleService.Init(context.Background()); err != nil {
+		log.Fatal(err)
+	}
+
+	r := handler.NewRouter(roomService, scheduleService)
 
 	log.Println("server started on :8080")
 	if err := http.ListenAndServe(":8080", r); err != nil {

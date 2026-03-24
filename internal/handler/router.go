@@ -7,10 +7,11 @@ import (
 	"test-backend-1-ArtyomRytikov/internal/service"
 )
 
-func NewRouter(roomService *service.RoomService) http.Handler {
+func NewRouter(roomService *service.RoomService, scheduleService *service.ScheduleService) http.Handler {
 	mux := http.NewServeMux()
 
 	roomHandler := NewRoomHandler(roomService)
+	scheduleHandler := NewScheduleHandler(scheduleService)
 
 	mux.HandleFunc("/_info", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -43,5 +44,26 @@ func NewRouter(roomService *service.RoomService) http.Handler {
 		http.HandlerFunc(roomHandler.List),
 	))
 
+	mux.Handle("/rooms/", middleware.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && hasSuffix(r.URL.Path, "/schedule/create"):
+			middleware.RequireRole("admin", http.HandlerFunc(scheduleHandler.Create)).ServeHTTP(w, r)
+			return
+		case r.Method == http.MethodGet && hasSuffix(r.URL.Path, "/slots/list"):
+			scheduleHandler.ListSlots(w, r)
+			return
+		default:
+			writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "not found")
+			return
+		}
+	})))
+
 	return mux
+}
+
+func hasSuffix(path, suffix string) bool {
+	if len(path) < len(suffix) {
+		return false
+	}
+	return path[len(path)-len(suffix):] == suffix
 }
