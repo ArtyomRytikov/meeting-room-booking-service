@@ -81,7 +81,9 @@ func (r *ScheduleRepository) CreateScheduleWithSlots(
 	if err != nil {
 		return domain.Schedule{}, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
 
 	schedule.ID = uuid.NewString()
 
