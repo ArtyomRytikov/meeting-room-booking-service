@@ -30,7 +30,7 @@ Backend-сервис для бронирования переговорных к
 ### 1. Клонировать репозиторий
 
 ```bash
-git clone <https://github.com/avito-internships/test-backend-1-ArtyomRytikov.git>
+git clone https://github.com/avito-internships/test-backend-1-ArtyomRytikov.git
 cd test-backend-1-ArtyomRytikov
 ```
 
