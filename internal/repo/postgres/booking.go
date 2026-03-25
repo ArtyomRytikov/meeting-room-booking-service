@@ -46,7 +46,6 @@ func (r *BookingRepository) Init(ctx context.Context) error {
 		ON bookings(room_id, status);
 		`,
 	}
-
 	for _, q := range queries {
 		if _, err := r.pool.Exec(ctx, q); err != nil {
 			return err
@@ -55,25 +54,17 @@ func (r *BookingRepository) Init(ctx context.Context) error {
 	return nil
 }
 
-type slotRow struct {
-	SlotID  string
-	RoomID  string
-	StartAt time.Time
-	EndAt   time.Time
-}
-
-func (r *BookingRepository) FindSlot(ctx context.Context, slotID string) (*slotRow, error) {
+func (r *BookingRepository) FindSlot(ctx context.Context, slotID string) (*domain.SlotDetails, error) {
 	row := r.pool.QueryRow(ctx, `
 		SELECT id, room_id, start_at, end_at
 		FROM slots
 		WHERE id = $1
 	`, slotID)
 
-	var s slotRow
+	var s domain.SlotDetails
 	if err := row.Scan(&s.SlotID, &s.RoomID, &s.StartAt, &s.EndAt); err != nil {
 		return nil, err
 	}
-
 	return &s, nil
 }
 
@@ -84,11 +75,12 @@ func (r *BookingRepository) Create(ctx context.Context, userID, slotID string) (
 	}
 
 	id := uuid.NewString()
+	createdAt := time.Now().UTC()
 
 	_, err = r.pool.Exec(ctx, `
-		INSERT INTO bookings (id, slot_id, room_id, user_id, status)
-		VALUES ($1, $2, $3, $4, 'active')
-	`, id, slot.SlotID, slot.RoomID, userID)
+		INSERT INTO bookings (id, slot_id, room_id, user_id, status, created_at)
+		VALUES ($1, $2, $3, $4, 'active', $5)
+	`, id, slot.SlotID, slot.RoomID, userID, createdAt)
 	if err != nil {
 		return domain.Booking{}, err
 	}
@@ -101,7 +93,7 @@ func (r *BookingRepository) Create(ctx context.Context, userID, slotID string) (
 		Status:    "active",
 		Start:     slot.StartAt.UTC().Format(time.RFC3339),
 		End:       slot.EndAt.UTC().Format(time.RFC3339),
-		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		CreatedAt: createdAt.Format(time.RFC3339),
 	}, nil
 }
 
@@ -139,18 +131,12 @@ func (r *BookingRepository) FindByID(ctx context.Context, bookingID string) (*do
 }
 
 func (r *BookingRepository) Cancel(ctx context.Context, bookingID string) error {
-	tag, err := r.pool.Exec(ctx, `
+	_, err := r.pool.Exec(ctx, `
 		UPDATE bookings
 		SET status = 'cancelled', cancelled_at = NOW()
 		WHERE id = $1 AND status = 'active'
 	`, bookingID)
-	if err != nil {
-		return err
-	}
-	if tag.RowsAffected() == 0 {
-		return errors.New("booking not found or already cancelled")
-	}
-	return nil
+	return err
 }
 
 func (r *BookingRepository) ListMy(ctx context.Context, userID string) ([]domain.Booking, error) {
@@ -159,6 +145,7 @@ func (r *BookingRepository) ListMy(ctx context.Context, userID string) ([]domain
 		FROM bookings b
 		JOIN slots s ON s.id = b.slot_id
 		WHERE b.user_id = $1
+		  AND s.start_at >= NOW()
 		ORDER BY s.start_at ASC
 	`, userID)
 	if err != nil {
@@ -169,13 +156,20 @@ func (r *BookingRepository) ListMy(ctx context.Context, userID string) ([]domain
 	return scanBookings(rows)
 }
 
-func (r *BookingRepository) ListAll(ctx context.Context) ([]domain.Booking, error) {
+func (r *BookingRepository) CountAll(ctx context.Context) (int, error) {
+	var total int
+	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM bookings`).Scan(&total)
+	return total, err
+}
+
+func (r *BookingRepository) ListAllPaginated(ctx context.Context, limit, offset int) ([]domain.Booking, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT b.id, b.slot_id, b.room_id, b.user_id, b.status, s.start_at, s.end_at, b.created_at
 		FROM bookings b
 		JOIN slots s ON s.id = b.slot_id
 		ORDER BY s.start_at ASC
-	`)
+		LIMIT $1 OFFSET $2
+	`, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +185,7 @@ type bookingScanner interface {
 }
 
 func scanBookings(rows bookingScanner) ([]domain.Booking, error) {
-	var result []domain.Booking
+	result := make([]domain.Booking, 0)
 
 	for rows.Next() {
 		var booking domain.Booking
@@ -221,3 +215,5 @@ func scanBookings(rows bookingScanner) ([]domain.Booking, error) {
 
 	return result, rows.Err()
 }
+
+var ErrNotFound = errors.New("not found")

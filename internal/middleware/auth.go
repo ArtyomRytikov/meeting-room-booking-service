@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -15,23 +16,43 @@ const (
 	RoleKey   contextKey = "role"
 )
 
+type errorItem struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+type errorBody struct {
+	Error errorItem `json:"error"`
+}
+
+func writeJSONError(w http.ResponseWriter, status int, code, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(errorBody{
+		Error: errorItem{
+			Code:    code,
+			Message: message,
+		},
+	})
+}
+
 func RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
-			http.Error(w, `{"error":{"code":"UNAUTHORIZED","message":"missing authorization header"}}`, http.StatusUnauthorized)
+			writeJSONError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authorization header")
 			return
 		}
 
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || parts[0] != "Bearer" || parts[1] == "" {
-			http.Error(w, `{"error":{"code":"UNAUTHORIZED","message":"invalid authorization header"}}`, http.StatusUnauthorized)
+			writeJSONError(w, http.StatusUnauthorized, "UNAUTHORIZED", "invalid authorization header")
 			return
 		}
 
 		claims, err := auth.ParseToken(parts[1])
 		if err != nil {
-			http.Error(w, `{"error":{"code":"UNAUTHORIZED","message":"invalid token"}}`, http.StatusUnauthorized)
+			writeJSONError(w, http.StatusUnauthorized, "UNAUTHORIZED", "invalid token")
 			return
 		}
 
@@ -46,7 +67,7 @@ func RequireRole(role string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got, _ := r.Context().Value(RoleKey).(string)
 		if got != role {
-			http.Error(w, `{"error":{"code":"FORBIDDEN","message":"forbidden"}}`, http.StatusForbidden)
+			writeJSONError(w, http.StatusForbidden, "FORBIDDEN", "forbidden")
 			return
 		}
 

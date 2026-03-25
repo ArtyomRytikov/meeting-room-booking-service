@@ -54,7 +54,7 @@ func (h *ScheduleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		case "room not found":
 			writeAPIError(w, http.StatusNotFound, "ROOM_NOT_FOUND", "room not found")
 		case "schedule exists":
-			writeAPIError(w, http.StatusBadRequest, "SCHEDULE_EXISTS", "schedule already exists")
+			writeAPIError(w, http.StatusConflict, "SCHEDULE_EXISTS", "schedule already exists")
 		default:
 			writeAPIError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		}

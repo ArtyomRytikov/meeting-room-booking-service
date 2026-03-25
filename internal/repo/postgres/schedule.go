@@ -158,9 +158,13 @@ func (r *ScheduleRepository) ListSlotsByDate(ctx context.Context, roomID string,
 	rows, err := r.pool.Query(ctx, `
 		SELECT s.id, s.room_id, s.start_at, s.end_at
 		FROM slots s
+		LEFT JOIN bookings b
+			ON b.slot_id = s.id
+			AND b.status = 'active'
 		WHERE s.room_id = $1
 		  AND s.start_at >= $2
 		  AND s.start_at < $3
+		  AND b.id IS NULL
 		ORDER BY s.start_at ASC
 	`, roomID, start, end)
 	if err != nil {
@@ -168,7 +172,8 @@ func (r *ScheduleRepository) ListSlotsByDate(ctx context.Context, roomID string,
 	}
 	defer rows.Close()
 
-	var result []domain.Slot
+	result := make([]domain.Slot, 0)
+
 	for rows.Next() {
 		var slot domain.Slot
 		var startAt time.Time

@@ -50,11 +50,11 @@ func NewRouter(
 	))
 
 	mux.Handle("/bookings/create", middleware.RequireAuth(
-		http.HandlerFunc(bookingHandler.Create),
+		middleware.RequireRole("user", http.HandlerFunc(bookingHandler.Create)),
 	))
 
 	mux.Handle("/bookings/my", middleware.RequireAuth(
-		http.HandlerFunc(bookingHandler.My),
+		middleware.RequireRole("user", http.HandlerFunc(bookingHandler.My)),
 	))
 
 	mux.Handle("/bookings/list", middleware.RequireAuth(
@@ -78,7 +78,7 @@ func NewRouter(
 	mux.Handle("/bookings/", middleware.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPost && hasSuffix(r.URL.Path, "/cancel"):
-			bookingHandler.Cancel(w, r)
+			middleware.RequireRole("user", http.HandlerFunc(bookingHandler.Cancel)).ServeHTTP(w, r)
 			return
 		default:
 			writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "not found")

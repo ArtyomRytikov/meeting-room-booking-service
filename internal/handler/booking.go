@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"test-backend-1-ArtyomRytikov/internal/middleware"
@@ -40,10 +41,12 @@ func (h *BookingHandler) Create(w http.ResponseWriter, r *http.Request) {
 		switch err.Error() {
 		case "slotId is required":
 			writeAPIError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		case "slot is in the past":
+			writeAPIError(w, http.StatusBadRequest, "INVALID_REQUEST", "slot is in the past")
 		case "slot not found":
 			writeAPIError(w, http.StatusNotFound, "SLOT_NOT_FOUND", "slot not found")
 		case "slot already booked":
-			writeAPIError(w, http.StatusBadRequest, "SLOT_ALREADY_BOOKED", "slot already booked")
+			writeAPIError(w, http.StatusConflict, "SLOT_ALREADY_BOOKED", "slot already booked")
 		default:
 			writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create booking")
 		}
@@ -70,23 +73,21 @@ func (h *BookingHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	userID, _ := r.Context().Value(middleware.UserIDKey).(string)
 	role, _ := r.Context().Value(middleware.RoleKey).(string)
 
-	err := h.service.Cancel(r.Context(), bookingID, userID, role)
+	booking, err := h.service.Cancel(r.Context(), bookingID, userID, role)
 	if err != nil {
 		switch err.Error() {
 		case "booking not found":
 			writeAPIError(w, http.StatusNotFound, "BOOKING_NOT_FOUND", "booking not found")
 		case "forbidden":
 			writeAPIError(w, http.StatusForbidden, "FORBIDDEN", "forbidden")
-		case "booking not found or already cancelled":
-			writeAPIError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		default:
 			writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to cancel booking")
 		}
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{
-		"status": "cancelled",
+	writeJSON(w, http.StatusOK, map[string]any{
+		"booking": booking,
 	})
 }
 
@@ -105,14 +106,43 @@ func (h *BookingHandler) My(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BookingHandler) List(w http.ResponseWriter, r *http.Request) {
-	bookings, err := h.service.ListAll(r.Context())
+	page := 1
+	pageSize := 20
+
+	if raw := r.URL.Query().Get("page"); strings.TrimSpace(raw) != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid page")
+			return
+		}
+		page = value
+	}
+
+	if raw := r.URL.Query().Get("pageSize"); strings.TrimSpace(raw) != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid pageSize")
+			return
+		}
+		pageSize = value
+	}
+
+	bookings, pagination, err := h.service.ListAll(r.Context(), page, pageSize)
 	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list bookings")
+		switch err.Error() {
+		case "invalid page":
+			writeAPIError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid page")
+		case "invalid pageSize":
+			writeAPIError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid pageSize")
+		default:
+			writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list bookings")
+		}
 		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"bookings": bookings,
+		"bookings":   bookings,
+		"pagination": pagination,
 	})
 }
 
