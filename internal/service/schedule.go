@@ -7,6 +7,8 @@ import (
 
 	"test-backend-1-ArtyomRytikov/internal/domain"
 	postgresrepo "test-backend-1-ArtyomRytikov/internal/repo/postgres"
+
+	"github.com/google/uuid"
 )
 
 type ScheduleRepository interface {
@@ -30,6 +32,10 @@ func (s *ScheduleService) Init(ctx context.Context) error {
 }
 
 func (s *ScheduleService) Create(ctx context.Context, schedule domain.Schedule) (domain.Schedule, error) {
+	if _, err := uuid.Parse(schedule.RoomID); err != nil {
+		return domain.Schedule{}, errors.New("invalid room id")
+	}
+
 	exists, err := s.repo.RoomExists(ctx, schedule.RoomID)
 	if err != nil {
 		return domain.Schedule{}, err
@@ -63,6 +69,10 @@ func (s *ScheduleService) Create(ctx context.Context, schedule domain.Schedule) 
 }
 
 func (s *ScheduleService) ListSlotsByDate(ctx context.Context, roomID, rawDate string) ([]domain.Slot, error) {
+	if _, err := uuid.Parse(roomID); err != nil {
+		return nil, errors.New("invalid room id")
+	}
+
 	exists, err := s.repo.RoomExists(ctx, roomID)
 	if err != nil {
 		return nil, err

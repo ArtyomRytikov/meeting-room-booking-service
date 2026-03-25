@@ -49,6 +49,8 @@ func (h *ScheduleHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		switch err.Error() {
+		case "invalid room id":
+			writeAPIError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid roomId")
 		case "room not found":
 			writeAPIError(w, http.StatusNotFound, "ROOM_NOT_FOUND", "room not found")
 		case "schedule exists":
@@ -85,6 +87,8 @@ func (h *ScheduleHandler) ListSlots(w http.ResponseWriter, r *http.Request) {
 	slots, err := h.service.ListSlotsByDate(r.Context(), roomID, date)
 	if err != nil {
 		switch err.Error() {
+		case "invalid room id":
+			writeAPIError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid roomId")
 		case "room not found":
 			writeAPIError(w, http.StatusNotFound, "ROOM_NOT_FOUND", "room not found")
 		case "invalid date":
